@@ -1,0 +1,46 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == "16361422@qq.com"
+      );
+    }
+
+    // 允许用户访问自己的所有数据（包括子集合），同时允许管理员管理所有用户数据
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+
+      // 递归匹配所有子路径，确保 contracts, payments, personnel, attendance 等均可访问
+      match /{allSubPaths=**} {
+        allow read, write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      }
+    }
+
+    match /users_metadata/{userId} {
+      allow create, update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow get: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+      allow delete: if isAdmin();
+    }
+
+    match /support_tickets/{ticketId} {
+      allow create: if isSignedIn();
+      allow list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow get: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /audit_logs/{logId} {
+      allow create: if isSignedIn();
+      allow list, get: if isAdmin();
+    }
+  }
+}
